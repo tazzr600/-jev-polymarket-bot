@@ -1,98 +1,2650 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
 <title>KRAKEN BOT</title>
+
 <style>
-:root{--bg:#07090d;--p:#101620;--l:#202a38;--t:#f5f7fb;--m:#8793a5;--g:#36e58b;--r:#ff5c76;--y:#e6c66d;--b:#62a8ff}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#152033,#07090d 45%);color:var(--t);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.app{max-width:1200px;margin:auto;padding:16px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.brand{font-weight:900;letter-spacing:.12em;font-size:24px}.sub{font-size:11px;color:var(--m);margin-top:3px}.status{font-size:12px;color:var(--g)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{background:rgba(16,22,32,.94);border:1px solid var(--l);border-radius:16px;padding:14px}.label{font-size:10px;color:var(--m);text-transform:uppercase;letter-spacing:.08em}.value{font-size:23px;font-weight:800;margin-top:5px}.controls{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}button{border:1px solid var(--l);background:#17202d;color:var(--t);border-radius:11px;padding:10px 14px;font-weight:700}button.primary{background:var(--y);color:#090b0e;border-color:var(--y)}button.stop{color:var(--r);border-color:#63303d;background:#211219}.main{display:grid;grid-template-columns:1.5fr 1fr;gap:10px}.title{display:flex;justify-content:space-between;align-items:center}.title h2{font-size:14px;margin:0}.badge{font-size:10px;border:1px solid var(--l);border-radius:20px;padding:5px 8px;color:var(--m)}.pick{border:1px solid rgba(230,198,109,.5);background:linear-gradient(135deg,rgba(230,198,109,.1),rgba(16,22,32,.9));padding:14px;border-radius:14px;margin:12px 0}.pick strong{color:var(--y)}.row{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:10px}.metric{background:#0b1119;border:1px solid var(--l);padding:8px;border-radius:10px}.metric small{display:block;color:var(--m);font-size:9px}.metric b{font-size:13px}.sig{border-top:1px solid var(--l);padding:12px 0}.sig:first-child{border-top:0}.right{display:grid;gap:10px}.pos{padding:10px 0;border-top:1px solid var(--l)}.pos:first-child{border-top:0}pre{white-space:pre-wrap;color:var(--m);font-size:11px}.green{color:var(--g)}.red{color:var(--r)}@media(max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.main{grid-template-columns:1fr}.row{grid-template-columns:repeat(2,1fr)}}@media(max-width:450px){.grid{gap:7px}.value{font-size:19px}.card{padding:12px}}
-</style>
-</head>
-<body>
-<div class="app">
-<div class="top"><div><div class="brand">KRAKEN BOT</div><div class="sub">AUTONOMOUS MACHINE-LEARNING TRADING SYSTEM</div></div><div class="status" id="conn">CONNECTING</div></div>
 
-<div class="grid">
-<div class="card"><div class="label">Mode</div><div class="value" id="mode">PAPER</div></div>
-<div class="card"><div class="label">P&amp;L</div><div class="value" id="pnl">$0.00</div></div>
-<div class="card"><div class="label">Win Rate</div><div class="value" id="win">—</div></div>
-<div class="card"><div class="label">Trades</div><div class="value" id="trades">0</div></div>
-</div>
-
-<div class="controls">
-<button class="primary" onclick="scan()">SCAN NOW</button>
-<button onclick="start()">START BOT</button>
-<button class="stop" onclick="stop()">STOP BOT</button>
-</div>
-
-<div class="main">
-<section class="card">
-<div class="title"><h2>🏆 KRAKEN BOT TOP PICK</h2><span class="badge" id="state">WAITING</span></div>
-<div id="top"><div style="color:var(--m);padding:20px 0">Waiting for the first ML scan…</div></div>
-<hr style="border-color:var(--l);border-width:1px 0 0;margin:15px 0">
-<div class="title"><h2>MARKET RANKING</h2><span class="badge" id="count">0</span></div>
-<div id="signals"></div>
-</section>
-
-<div class="right">
-<section class="card"><div class="title"><h2>OPEN POSITIONS</h2><span class="badge">RISK ENGINE</span></div><div id="positions">None</div></section>
-<section class="card"><div class="title"><h2>MODEL</h2><span class="badge">LOCAL ML</span></div><div id="model" style="color:var(--m);margin-top:10px">No model data yet.</div></section>
-<section class="card"><div class="title"><h2>ERROR / LOG</h2></div><pre id="error">None</pre></section>
-</div>
-</div>
-</div>
-
-<script>
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-const pct=x=>(Number(x||0)*100).toFixed(2)+"%";
-const money=x=>"$"+Number(x||0).toFixed(2);
-
-async function call(path,opts={}){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});if(!r.ok)throw new Error(await r.text());return r.json()}
-
-function render(d){
- document.getElementById("conn").textContent="CONNECTED";
- document.getElementById("mode").textContent=d.mode;
- document.getElementById("pnl").textContent=money(d.stats?.pnl);
- document.getElementById("win").textContent=d.stats?.trades?pct(d.stats.win_rate):"—";
- document.getElementById("trades").textContent=d.stats?.trades||0;
- document.getElementById("count").textContent=(d.signals||[]).length;
- document.getElementById("state").textContent=d.running?"RUNNING":"STOPPED";
- document.getElementById("error").textContent=d.error||"None";
-
- const s=d.signals||[];
- const t=s[0];
- if(t){
-   document.getElementById("top").innerHTML=`<div class="pick"><strong>${esc(t.symbol)}</strong> — $${Number(t.price).toFixed(4)}
-   <div class="row">
-    <div class="metric"><small>ML PROBABILITY</small><b>${pct(t.probability_up)}</b></div>
-    <div class="metric"><small>EXPECTED MOVE</small><b>${pct(t.expected_move)}</b></div>
-    <div class="metric"><small>MODEL ACCURACY</small><b>${pct(t.accuracy)}</b></div>
-    <div class="metric"><small>SCORE</small><b>${Number(t.score).toFixed(5)}</b></div>
-   </div></div>`;
- }else document.getElementById("top").innerHTML=`<div style="color:var(--m);padding:20px 0">No eligible trade.</div>`;
-
- document.getElementById("signals").innerHTML=s.map((x,i)=>`<div class="sig">
- <b>${i===0?"🏆 ":""}${esc(x.symbol)}</b> <span style="color:var(--m)">$${Number(x.price).toFixed(4)}</span>
- <div class="row">
- <div class="metric"><small>PROB.</small><b>${pct(x.probability_up)}</b></div>
- <div class="metric"><small>MOVE</small><b>${pct(x.expected_move)}</b></div>
- <div class="metric"><small>SPREAD</small><b>${pct(x.spread)}</b></div>
- <div class="metric"><small>SCORE</small><b>${Number(x.score).toFixed(5)}</b></div>
- </div></div>`).join("")||"<div style='color:var(--m);padding:15px 0'>No signals yet.</div>";
-
- const p=d.positions||[];
- document.getElementById("positions").innerHTML=p.map(x=>`<div class="pos"><b>${esc(x.symbol)}</b><br>
- Entry $${Number(x.entry_price).toFixed(4)} · Stop $${Number(x.stop_price).toFixed(4)} · Target $${Number(x.target_price).toFixed(4)}</div>`).join("")||"<div style='color:var(--m);padding:12px 0'>No open positions.</div>";
-
- if(t) document.getElementById("model").innerHTML=`Top model: <b>${esc(t.symbol)}</b><br>Training samples: ${t.samples}<br>Holdout accuracy: ${pct(t.accuracy)}<br>Last trained: ${t.trained_at?new Date(t.trained_at*1000).toLocaleTimeString():"—"}`;
+* {
+    box-sizing: border-box;
 }
 
-async function refresh(){try{render(await call("/api/status"))}catch(e){document.getElementById("conn").textContent="OFFLINE";document.getElementById("error").textContent=e.message}}
-async function scan(){try{document.getElementById("state").textContent="SCANNING";await call("/api/scan",{method:"POST"});await refresh()}catch(e){document.getElementById("error").textContent=e.message}}
-async function start(){try{await call("/api/start",{method:"POST"});await refresh()}catch(e){alert(e.message)}}
-async function stop(){try{await call("/api/stop",{method:"POST"});await refresh()}catch(e){alert(e.message)}}
-refresh();setInterval(refresh,5000);
+body {
+    margin: 0;
+    background: #07080a;
+    color: #f5f7fa;
+    font-family:
+        Inter,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+}
+
+.wrap {
+    max-width: 1550px;
+    margin: auto;
+    padding: 22px;
+}
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.logo {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #151820;
+    border: 1px solid #292e39;
+
+    font-weight: 800;
+    font-size: 18px;
+}
+
+h1 {
+    margin: 0;
+
+    font-size: 28px;
+
+    letter-spacing: .12em;
+}
+
+.sub {
+    color: #8f96a5;
+
+    font-size: 12px;
+
+    margin-top: 5px;
+}
+
+.status-wrap {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.badge {
+    padding: 9px 13px;
+
+    border-radius: 999px;
+
+    background: #11141a;
+
+    border: 1px solid #292e38;
+
+    font-size: 11px;
+
+    white-space: nowrap;
+}
+
+.dot {
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+
+    display: inline-block;
+
+    margin-right: 6px;
+
+    background: #777;
+}
+
+.dot.ok {
+    background: #63e6a0;
+}
+
+.dot.bad {
+    background: #ff6f6f;
+}
+
+/* =========================================================
+   CARDS
+   ========================================================= */
+
+.grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(6, 1fr);
+
+    gap: 12px;
+
+    margin-bottom: 14px;
+}
+
+.card {
+    background: #101217;
+
+    border: 1px solid #222731;
+
+    border-radius: 15px;
+
+    padding: 16px;
+
+    min-width: 0;
+}
+
+.label {
+    color: #8f96a5;
+
+    font-size: 10px;
+
+    text-transform: uppercase;
+
+    letter-spacing: .1em;
+}
+
+.value {
+    font-size: 25px;
+
+    font-weight: 750;
+
+    margin-top: 8px;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+.green {
+    color: #67e6a1;
+}
+
+.red {
+    color: #ff7474;
+}
+
+.yellow {
+    color: #f4d06f;
+}
+
+/* =========================================================
+   PANELS
+   ========================================================= */
+
+.panel {
+    background: #101217;
+
+    border: 1px solid #222731;
+
+    border-radius: 15px;
+
+    padding: 16px;
+
+    margin-bottom: 14px;
+
+    overflow: hidden;
+}
+
+.panel-head {
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
+
+    gap: 12px;
+
+    margin-bottom: 12px;
+}
+
+.panel-title {
+    font-size: 15px;
+
+    font-weight: 700;
+}
+
+.small {
+    color: #8f96a5;
+
+    font-size: 11px;
+}
+
+/* =========================================================
+   CHART
+   ========================================================= */
+
+.chart-panel {
+    padding-bottom: 12px;
+}
+
+.chart-top {
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: flex-end;
+
+    gap: 20px;
+}
+
+.chart-current {
+    text-align: right;
+}
+
+.chart-current .number {
+    font-size: 22px;
+
+    font-weight: 750;
+}
+
+.chart {
+    width: 100%;
+
+    height: 320px;
+
+    display: block;
+
+    margin-top: 10px;
+}
+
+/* =========================================================
+   CONTROLS
+   ========================================================= */
+
+.controls {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 8px;
+
+    margin-bottom: 14px;
+}
+
+button {
+    appearance: none;
+
+    border: 1px solid #303641;
+
+    background: #171b22;
+
+    color: #f5f7fa;
+
+    border-radius: 9px;
+
+    padding: 10px 14px;
+
+    font-size: 12px;
+
+    font-weight: 650;
+
+    cursor: pointer;
+
+    transition:
+        background .15s,
+        border .15s,
+        transform .15s;
+}
+
+button:hover {
+    background: #202630;
+
+    border-color: #424957;
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+button:disabled {
+    opacity: .5;
+
+    cursor: wait;
+}
+
+/* =========================================================
+   TABLE
+   ========================================================= */
+
+.table-wrap {
+    width: 100%;
+
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    min-width: 800px;
+
+    font-size: 12px;
+}
+
+th {
+    color: #858c9b;
+
+    font-size: 9px;
+
+    font-weight: 650;
+
+    text-transform: uppercase;
+
+    letter-spacing: .08em;
+
+    text-align: left;
+
+    padding: 10px 8px;
+
+    border-bottom:
+        1px solid #252a33;
+}
+
+td {
+    padding: 11px 8px;
+
+    border-bottom:
+        1px solid #1d2129;
+
+    white-space: nowrap;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+.symbol {
+    font-weight: 750;
+}
+
+.trade-yes {
+    color: #67e6a1;
+
+    font-weight: 750;
+}
+
+.trade-no {
+    color: #737b89;
+}
+
+/* =========================================================
+   TWO COLUMN AREA
+   ========================================================= */
+
+.two-col {
+    display: grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap: 14px;
+}
+
+/* =========================================================
+   CONNECTION BOX
+   ========================================================= */
+
+.connection {
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 10px;
+}
+
+.connection-item {
+    background: #0c0e12;
+
+    border:
+        1px solid #20242c;
+
+    border-radius: 10px;
+
+    padding: 12px;
+}
+
+.connection-value {
+    margin-top: 7px;
+
+    font-size: 12px;
+
+    font-weight: 700;
+}
+
+/* =========================================================
+   ERROR
+   ========================================================= */
+
+.error {
+    display: none;
+
+    background: #211214;
+
+    border: 1px solid #51272b;
+
+    color: #ff8585;
+
+    border-radius: 10px;
+
+    padding: 11px 13px;
+
+    margin-bottom: 14px;
+
+    font-size: 12px;
+}
+
+.error.show {
+    display: block;
+}
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (
+    max-width: 1100px
+) {
+
+    .grid {
+        grid-template-columns:
+            repeat(3, 1fr);
+    }
+
+}
+
+@media (
+    max-width: 760px
+) {
+
+    .wrap {
+        padding: 12px;
+    }
+
+    header {
+        align-items: flex-start;
+    }
+
+    .grid {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+
+    .two-col {
+        grid-template-columns:
+            1fr;
+    }
+
+    .connection {
+        grid-template-columns:
+            1fr;
+    }
+
+    .chart {
+        height: 240px;
+    }
+
+    h1 {
+        font-size: 21px;
+    }
+
+    .value {
+        font-size: 19px;
+    }
+
+}
+
+@media (
+    max-width: 430px
+) {
+
+    .grid {
+        grid-template-columns:
+            1fr 1fr;
+    }
+
+    .card {
+        padding: 13px;
+    }
+
+    .value {
+        font-size: 17px;
+    }
+
+}
+
+</style>
+
+</head>
+
+
+<body>
+
+<div class="wrap">
+
+<!-- =======================================================
+     HEADER
+======================================================== -->
+
+<header>
+
+<div class="brand">
+
+<div class="logo">
+K
+</div>
+
+<div>
+
+<h1>KRAKEN BOT</h1>
+
+<div class="sub">
+AI DAY TRADING • FULL KRAKEN MARKET SCANNER
+</div>
+
+</div>
+
+</div>
+
+
+<div class="status-wrap">
+
+<div
+    id="botBadge"
+    class="badge"
+>
+<span
+    id="botDot"
+    class="dot"
+></span>
+
+<span id="botStatus">
+Connecting...
+</span>
+</div>
+
+
+<div
+    id="modeBadge"
+    class="badge"
+>
+PAPER
+</div>
+
+
+<div
+    id="krakenBadge"
+    class="badge"
+>
+Kraken checking...
+</div>
+
+</div>
+
+</header>
+
+
+<!-- =======================================================
+     ERROR
+======================================================== -->
+
+<div
+    id="errorBox"
+    class="error"
+></div>
+
+
+<!-- =======================================================
+     PERFORMANCE CARDS
+======================================================== -->
+
+<div class="grid">
+
+
+<div class="card">
+
+<div class="label">
+Paper Equity
+</div>
+
+<div
+    id="equity"
+    class="value"
+>
+$1,000.00
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="label">
+Return
+</div>
+
+<div
+    id="return"
+    class="value"
+>
+0.00%
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="label">
+Available Cash
+</div>
+
+<div
+    id="cash"
+    class="value"
+>
+$1,000.00
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="label">
+Realized P&amp;L
+</div>
+
+<div
+    id="realized"
+    class="value"
+>
+$0.00
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="label">
+Win Rate
+</div>
+
+<div
+    id="winrate"
+    class="value"
+>
+0.0%
+</div>
+
+</div>
+
+
+<div class="card">
+
+<div class="label">
+Markets Found
+</div>
+
+<div
+    id="markets"
+    class="value"
+>
+0
+</div>
+
+</div>
+
+</div>
+
+
+<!-- =======================================================
+     EQUITY CHART
+======================================================== -->
+
+<div class="panel chart-panel">
+
+<div class="chart-top">
+
+<div>
+
+<div class="label">
+Paper Equity Growth
+</div>
+
+<div class="small">
+Live marked-to-market paper account
+</div>
+
+</div>
+
+
+<div class="chart-current">
+
+<div class="small">
+Current Equity
+</div>
+
+<div
+    id="chartCurrent"
+    class="number"
+>
+$1,000.00
+</div>
+
+</div>
+
+</div>
+
+
+<canvas
+    id="equityChart"
+    class="chart"
+></canvas>
+
+</div>
+
+
+<!-- =======================================================
+     CONTROLS
+======================================================== -->
+
+<div class="controls">
+
+<button
+    id="startButton"
+    onclick="startBot()"
+>
+Start Bot
+</button>
+
+
+<button
+    id="stopButton"
+    onclick="stopBot()"
+>
+Stop Bot
+</button>
+
+
+<button
+    id="scanButton"
+    onclick="runScan(this)"
+>
+Run Full-Market Scan
+</button>
+
+
+<button
+    onclick="refresh()"
+>
+Refresh
+</button>
+
+</div>
+
+
+<!-- =======================================================
+     AI MARKET SIGNALS
+======================================================== -->
+
+<div class="panel">
+
+<div class="panel-head">
+
+<div>
+
+<div class="panel-title">
+AI Market Signals
+</div>
+
+<div class="small">
+Top Kraken markets ranked by liquidity and AI signal
+</div>
+
+</div>
+
+
+<div
+    id="lastScan"
+    class="small"
+>
+Last scan: —
+</div>
+
+</div>
+
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+Rank
+</th>
+
+<th>
+Market
+</th>
+
+<th>
+Price
+</th>
+
+<th>
+24h Volume
+</th>
+
+<th>
+Direction
+</th>
+
+<th>
+AI Probability
+</th>
+
+<th>
+Expected Move
+</th>
+
+<th>
+Confidence
+</th>
+
+<th>
+Strategy
+</th>
+
+<th>
+Score
+</th>
+
+<th>
+Trade
+</th>
+
+</tr>
+
+</thead>
+
+
+<tbody
+    id="signals"
+>
+
+<tr>
+
+<td
+    colspan="11"
+>
+Waiting for AI scan...
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<!-- =======================================================
+     POSITIONS + PERFORMANCE
+======================================================== -->
+
+<div class="two-col">
+
+
+<div class="panel">
+
+<div class="panel-head">
+
+<div>
+
+<div class="panel-title">
+Open Positions
+</div>
+
+<div class="small">
+Current paper positions
+</div>
+
+</div>
+
+</div>
+
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+Market
+</th>
+
+<th>
+Entry
+</th>
+
+<th>
+Amount
+</th>
+
+<th>
+Value
+</th>
+
+<th>
+Stop
+</th>
+
+<th>
+Target
+</th>
+
+</tr>
+
+</thead>
+
+
+<tbody
+    id="positions"
+>
+
+<tr>
+
+<td
+    colspan="6"
+>
+No open positions.
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+<div class="panel">
+
+<div class="panel-head">
+
+<div>
+
+<div class="panel-title">
+Performance
+</div>
+
+<div class="small">
+Trading statistics
+</div>
+
+</div>
+
+</div>
+
+
+<div class="table-wrap">
+
+<table>
+
+<tbody>
+
+<tr>
+
+<td>
+Total Trades
+</td>
+
+<td id="totalTrades">
+0
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+Wins
+</td>
+
+<td id="wins">
+0
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+Losses
+</td>
+
+<td id="losses">
+0
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+Profit Factor
+</td>
+
+<td id="profitFactor">
+0.00
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+Unrealized P&amp;L
+</td>
+
+<td id="unrealized">
+$0.00
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+Drawdown
+</td>
+
+<td id="drawdown">
+0.00%
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+24h P&amp;L
+</td>
+
+<td id="dayPnl">
+$0.00
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- =======================================================
+     CONNECTION / SCANNER
+======================================================== -->
+
+<div class="panel">
+
+<div class="panel-head">
+
+<div>
+
+<div class="panel-title">
+System Status
+</div>
+
+<div class="small">
+Exchange connection and scanner status
+</div>
+
+</div>
+
+</div>
+
+
+<div class="connection">
+
+
+<div class="connection-item">
+
+<div class="label">
+Kraken Connection
+</div>
+
+<div
+    id="connection"
+    class="connection-value"
+>
+Checking...
+</div>
+
+</div>
+
+
+<div class="connection-item">
+
+<div class="label">
+Authentication
+</div>
+
+<div
+    id="authentication"
+    class="connection-value"
+>
+Checking...
+</div>
+
+</div>
+
+
+<div class="connection-item">
+
+<div class="label">
+Live Orders
+</div>
+
+<div
+    id="liveOrders"
+    class="connection-value"
+>
+OFF
+</div>
+
+</div>
+
+
+<div class="connection-item">
+
+<div class="label">
+Markets Loaded
+</div>
+
+<div
+    id="marketsLoaded"
+    class="connection-value"
+>
+0
+</div>
+
+</div>
+
+
+<div class="connection-item">
+
+<div class="label">
+Liquid Markets
+</div>
+
+<div
+    id="liquidMarkets"
+    class="connection-value"
+>
+0
+</div>
+
+</div>
+
+
+<div class="connection-item">
+
+<div class="label">
+Markets Analyzed
+</div>
+
+<div
+    id="marketsAnalyzed"
+    class="connection-value"
+>
+0
+</div>
+
+</div>
+
+</div>
+
+</div>
+
+
+</div>
+
+
+<script>
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+function money(value) {
+
+    const number =
+        Number(
+            value || 0
+        );
+
+    return "$" +
+        number.toLocaleString(
+            undefined,
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        );
+}
+
+
+function number(value, decimals = 4) {
+
+    return Number(
+        value || 0
+    ).toLocaleString(
+        undefined,
+        {
+            minimumFractionDigits:
+                decimals,
+
+            maximumFractionDigits:
+                decimals
+        }
+    );
+}
+
+
+function percent(value) {
+
+    return (
+        Number(
+            value || 0
+        )
+        *
+        100
+    ).toFixed(2) + "%";
+}
+
+
+function escapeHtml(value) {
+
+    return String(
+        value ?? ""
+    ).replace(
+        /[&<>"']/g,
+        function(character) {
+
+            return {
+
+                "&":
+                    "&amp;",
+
+                "<":
+                    "&lt;",
+
+                ">":
+                    "&gt;",
+
+                '"':
+                    "&quot;",
+
+                "'":
+                    "&#39;"
+            }[
+                character
+            ];
+
+        }
+    );
+}
+
+
+/* ============================================================
+   ERROR DISPLAY
+============================================================ */
+
+function showError(message) {
+
+    const box =
+        document.getElementById(
+            "errorBox"
+        );
+
+    if (!message) {
+
+        box.textContent = "";
+
+        box.classList.remove(
+            "show"
+        );
+
+        return;
+    }
+
+    box.textContent =
+        message;
+
+    box.classList.add(
+        "show"
+    );
+}
+
+
+/* ============================================================
+   EQUITY CHART
+============================================================ */
+
+function drawEquity(history) {
+
+    const canvas =
+        document.getElementById(
+            "equityChart"
+        );
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+    const dpr =
+        window.devicePixelRatio || 1;
+
+    const width =
+        Math.max(
+            rect.width,
+            300
+        );
+
+    const height =
+        Math.max(
+            rect.height,
+            200
+        );
+
+    canvas.width =
+        width * dpr;
+
+    canvas.height =
+        height * dpr;
+
+    const ctx =
+        canvas.getContext(
+            "2d"
+        );
+
+    ctx.setTransform(
+        dpr,
+        0,
+        0,
+        dpr,
+        0,
+        0
+    );
+
+    ctx.clearRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+
+    /* --------------------------------------------------------
+       NO DATA
+    -------------------------------------------------------- */
+
+    if (
+        !history ||
+        !history.length
+    ) {
+
+        ctx.fillStyle =
+            "#858c9b";
+
+        ctx.font =
+            "12px Arial";
+
+        ctx.fillText(
+            "Waiting for equity data...",
+            20,
+            30
+        );
+
+        return;
+    }
+
+
+    /* --------------------------------------------------------
+       VALUES
+    -------------------------------------------------------- */
+
+    const values =
+        history.map(
+            item =>
+                Number(
+                    item.equity || 0
+                )
+        );
+
+
+    let min =
+        Math.min(
+            ...values
+        );
+
+    let max =
+        Math.max(
+            ...values
+        );
+
+
+    if (
+        min === max
+    ) {
+
+        min -= 1;
+
+        max += 1;
+    }
+
+
+    const left =
+        55;
+
+    const right =
+        20;
+
+    const top =
+        20;
+
+    const bottom =
+        32;
+
+
+    const chartWidth =
+        width
+        -
+        left
+        -
+        right;
+
+
+    const chartHeight =
+        height
+        -
+        top
+        -
+        bottom;
+
+
+    const range =
+        max
+        -
+        min;
+
+
+    /* --------------------------------------------------------
+       GRID
+    -------------------------------------------------------- */
+
+    ctx.lineWidth = 1;
+
+    ctx.strokeStyle =
+        "#222730";
+
+    ctx.fillStyle =
+        "#707887";
+
+    ctx.font =
+        "10px Arial";
+
+
+    for (
+        let i = 0;
+        i <= 4;
+        i++
+    ) {
+
+        const y =
+            top
+            +
+            (
+                i / 4
+            )
+            *
+            chartHeight;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            left,
+            y
+        );
+
+        ctx.lineTo(
+            width - right,
+            y
+        );
+
+        ctx.stroke();
+
+
+        const value =
+            max
+            -
+            (
+                i / 4
+            )
+            *
+            range;
+
+
+        ctx.fillText(
+            money(value),
+            5,
+            y + 3
+        );
+    }
+
+
+    /* --------------------------------------------------------
+       EQUITY LINE
+    -------------------------------------------------------- */
+
+    ctx.beginPath();
+
+
+    values.forEach(
+        (
+            value,
+            index
+        ) => {
+
+            const x =
+                left
+                +
+                (
+                    index
+                    /
+                    Math.max(
+                        values.length - 1,
+                        1
+                    )
+                )
+                *
+                chartWidth;
+
+
+            const y =
+                top
+                +
+                (
+                    1
+                    -
+                    (
+                        value - min
+                    )
+                    /
+                    range
+                )
+                *
+                chartHeight;
+
+
+            if (
+                index === 0
+            ) {
+
+                ctx.moveTo(
+                    x,
+                    y
+                );
+
+            } else {
+
+                ctx.lineTo(
+                    x,
+                    y
+                );
+            }
+
+        }
+    );
+
+
+    ctx.strokeStyle =
+        "#69e6a3";
+
+    ctx.lineWidth = 2;
+
+    ctx.stroke();
+
+
+    /* --------------------------------------------------------
+       LAST POINT
+    -------------------------------------------------------- */
+
+    const lastIndex =
+        values.length - 1;
+
+    const lastValue =
+        values[
+            lastIndex
+        ];
+
+
+    const lastX =
+        left
+        +
+        (
+            lastIndex
+            /
+            Math.max(
+                values.length - 1,
+                1
+            )
+        )
+        *
+        chartWidth;
+
+
+    const lastY =
+        top
+        +
+        (
+            1
+            -
+            (
+                lastValue - min
+            )
+            /
+            range
+        )
+        *
+        chartHeight;
+
+
+    ctx.beginPath();
+
+    ctx.arc(
+        lastX,
+        lastY,
+        4,
+        0,
+        Math.PI * 2
+    );
+
+    ctx.fillStyle =
+        "#f5f7fa";
+
+    ctx.fill();
+
+
+    /* --------------------------------------------------------
+       CURRENT VALUE
+    -------------------------------------------------------- */
+
+    ctx.fillStyle =
+        "#f5f7fa";
+
+    ctx.font =
+        "bold 12px Arial";
+
+    ctx.fillText(
+        money(lastValue),
+        Math.max(
+            left,
+            lastX - 65
+        ),
+        Math.max(
+            14,
+            lastY - 10
+        )
+    );
+
+}
+
+
+/* ============================================================
+   UPDATE PERFORMANCE
+============================================================ */
+
+function updatePerformance(stats) {
+
+    const equity =
+        Number(
+            stats.paper_equity || 0
+        );
+
+    const returnPct =
+        Number(
+            stats.return_pct || 0
+        );
+
+    const cash =
+        Number(
+            stats.paper_balance || 0
+        );
+
+    const realized =
+        Number(
+            stats.realized_pnl || 0
+        );
+
+
+    document.getElementById(
+        "equity"
+    ).textContent =
+        money(equity);
+
+
+    document.getElementById(
+        "return"
+    ).textContent =
+        percent(returnPct);
+
+
+    document.getElementById(
+        "cash"
+    ).textContent =
+        money(cash);
+
+
+    document.getElementById(
+        "realized"
+    ).textContent =
+        money(realized);
+
+
+    document.getElementById(
+        "winrate"
+    ).textContent =
+        (
+            Number(
+                stats.win_rate || 0
+            )
+            *
+            100
+        ).toFixed(1)
+        +
+        "%";
+
+
+    document.getElementById(
+        "chartCurrent"
+    ).textContent =
+        money(equity);
+
+
+    document.getElementById(
+        "totalTrades"
+    ).textContent =
+        Number(
+            stats.trades || 0
+        );
+
+
+    document.getElementById(
+        "wins"
+    ).textContent =
+        Number(
+            stats.wins || 0
+        );
+
+
+    document.getElementById(
+        "losses"
+    ).textContent =
+        Number(
+            stats.losses || 0
+        );
+
+
+    document.getElementById(
+        "profitFactor"
+    ).textContent =
+        Number(
+            stats.profit_factor || 0
+        ).toFixed(2);
+
+
+    document.getElementById(
+        "unrealized"
+    ).textContent =
+        money(
+            stats.unrealized_pnl
+        );
+
+
+    document.getElementById(
+        "drawdown"
+    ).textContent =
+        percent(
+            stats.drawdown_pct
+        );
+
+
+    document.getElementById(
+        "dayPnl"
+    ).textContent =
+        money(
+            stats.last_24h_pnl
+        );
+
+
+    const returnElement =
+        document.getElementById(
+            "return"
+        );
+
+
+    returnElement.className =
+        "value " +
+        (
+            returnPct >= 0
+                ? "green"
+                : "red"
+        );
+}
+
+
+/* ============================================================
+   UPDATE STATUS
+============================================================ */
+
+function updateStatus(data) {
+
+    const botDot =
+        document.getElementById(
+            "botDot"
+        );
+
+    const botStatus =
+        document.getElementById(
+            "botStatus"
+        );
+
+
+    if (
+        data.running
+    ) {
+
+        botDot.className =
+            "dot ok";
+
+        botStatus.textContent =
+            "Bot Running";
+
+    } else {
+
+        botDot.className =
+            "dot bad";
+
+        botStatus.textContent =
+            "Bot Stopped";
+    }
+
+
+    document.getElementById(
+        "modeBadge"
+    ).textContent =
+        data.mode ||
+        "PAPER";
+
+
+    const authenticated =
+        Boolean(
+            data.kraken &&
+            data.kraken.authenticated
+        );
+
+
+    const krakenBadge =
+        document.getElementById(
+            "krakenBadge"
+        );
+
+
+    if (
+        authenticated
+    ) {
+
+        krakenBadge.innerHTML =
+            '<span class="dot ok"></span>' +
+            'Kraken Authenticated';
+
+    } else {
+
+        krakenBadge.innerHTML =
+            '<span class="dot bad"></span>' +
+            'Kraken Not Authenticated';
+    }
+
+
+    document.getElementById(
+        "connection"
+    ).textContent =
+        data.kraken?.connected
+            ? "Connected"
+            : "Offline";
+
+
+    document.getElementById(
+        "authentication"
+    ).textContent =
+        authenticated
+            ? "Authenticated"
+            : "Not authenticated";
+
+
+    document.getElementById(
+        "liveOrders"
+    ).textContent =
+        data.kraken?.live_orders_enabled
+            ? "ON"
+            : "OFF";
+
+
+    document.getElementById(
+        "marketsLoaded"
+    ).textContent =
+        Number(
+            data.scanner?.markets_loaded
+            || 0
+        );
+
+
+    document.getElementById(
+        "liquidMarkets"
+    ).textContent =
+        Number(
+            data.scanner?.liquid_markets
+            || 0
+        );
+
+
+    document.getElementById(
+        "marketsAnalyzed"
+    ).textContent =
+        Number(
+            data.scanner?.markets_sent_to_ml
+            || 0
+        );
+
+
+    document.getElementById(
+        "markets"
+    ).textContent =
+        Number(
+            data.scanner?.liquid_markets
+            || 0
+        );
+
+
+    document.getElementById(
+        "lastScan"
+    ).textContent =
+        "Last scan: " +
+        (
+            data.last_scan
+                ? new Date(
+                    data.last_scan * 1000
+                ).toLocaleString()
+                : "—"
+        );
+}
+
+
+/* ============================================================
+   RENDER SIGNALS
+============================================================ */
+
+function renderSignals(
+    signals
+) {
+
+    const body =
+        document.getElementById(
+            "signals"
+        );
+
+
+    if (
+        !signals ||
+        !signals.length
+    ) {
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="11">
+                    No AI signals yet.
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    body.innerHTML =
+        signals
+        .map(
+            signal => {
+
+                const probability =
+                    Number(
+                        signal.probability_up
+                        || 0
+                    );
+
+
+                const expectedMove =
+                    Number(
+                        signal.expected_move
+                        || 0
+                    );
+
+
+                const confidence =
+                    Number(
+                        signal.confidence
+                        || 0
+                    );
+
+
+                const strategy =
+                    Number(
+                        signal.strategy_score
+                        || 0
+                    );
+
+
+                const tradeable =
+                    Boolean(
+                        signal.tradeable
+                    );
+
+
+                return `
+
+                <tr>
+
+                    <td>
+                        #${escapeHtml(
+                            signal.market_rank
+                        )}
+                    </td>
+
+
+                    <td class="symbol">
+                        ${escapeHtml(
+                            signal.symbol
+                        )}
+                    </td>
+
+
+                    <td>
+                        ${money(
+                            signal.price
+                        )}
+                    </td>
+
+
+                    <td>
+                        ${money(
+                            signal.volume_24h
+                        )}
+                    </td>
+
+
+                    <td>
+                        ${escapeHtml(
+                            signal.direction
+                        )}
+                    </td>
+
+
+                    <td>
+                        ${
+                            (
+                                probability
+                                *
+                                100
+                            ).toFixed(1)
+                        }%
+                    </td>
+
+
+                    <td>
+                        ${
+                            (
+                                expectedMove
+                                *
+                                100
+                            ).toFixed(2)
+                        }%
+                    </td>
+
+
+                    <td>
+                        ${
+                            (
+                                confidence
+                                *
+                                100
+                            ).toFixed(1)
+                        }%
+                    </td>
+
+
+                    <td class="${
+                        strategy >= 0
+                            ? "green"
+                            : "red"
+                    }">
+
+                        ${
+                            (
+                                strategy
+                                *
+                                100
+                            ).toFixed(1)
+                        }%
+
+                    </td>
+
+
+                    <td>
+                        ${
+                            Number(
+                                signal.score
+                                || 0
+                            ).toFixed(5)
+                        }
+                    </td>
+
+
+                    <td class="${
+                        tradeable
+                            ? "trade-yes"
+                            : "trade-no"
+                    }">
+
+                        ${
+                            tradeable
+                                ? "YES"
+                                : "NO"
+                        }
+
+                    </td>
+
+                </tr>
+
+                `;
+            }
+        )
+        .join("");
+}
+
+
+/* ============================================================
+   RENDER POSITIONS
+============================================================ */
+
+function renderPositions(
+    positions
+) {
+
+    const body =
+        document.getElementById(
+            "positions"
+        );
+
+
+    if (
+        !positions ||
+        !positions.length
+    ) {
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="6">
+                    No open positions.
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    body.innerHTML =
+        positions
+        .map(
+            position => `
+
+            <tr>
+
+                <td class="symbol">
+                    ${escapeHtml(
+                        position.symbol
+                    )}
+                </td>
+
+
+                <td>
+                    ${money(
+                        position.entry_price
+                    )}
+                </td>
+
+
+                <td>
+                    ${number(
+                        position.amount,
+                        8
+                    )}
+                </td>
+
+
+                <td>
+                    ${money(
+                        position.notional
+                    )}
+                </td>
+
+
+                <td class="red">
+                    ${money(
+                        position.stop_price
+                    )}
+                </td>
+
+
+                <td class="green">
+                    ${money(
+                        position.target_price
+                    )}
+                </td>
+
+            </tr>
+
+            `
+        )
+        .join("");
+}
+
+
+/* ============================================================
+   MAIN REFRESH
+============================================================ */
+
+async function refresh() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/status",
+                {
+                    cache:
+                        "no-store"
+                }
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                "Dashboard API returned " +
+                response.status
+            );
+        }
+
+
+        const data =
+            await response.json();
+
+
+        updateStatus(
+            data
+        );
+
+
+        updatePerformance(
+            data.stats || {}
+        );
+
+
+        renderSignals(
+            data.signals || []
+        );
+
+
+        renderPositions(
+            data.positions || []
+        );
+
+
+        drawEquity(
+            data.equity || []
+        );
+
+
+        showError(
+            data.error ||
+            data.scanner?.last_error ||
+            data.kraken?.error ||
+            ""
+        );
+
+    }
+
+    catch (error) {
+
+        showError(
+            error.message
+        );
+
+        document.getElementById(
+            "botStatus"
+        ).textContent =
+            "Dashboard Offline";
+
+        document.getElementById(
+            "botDot"
+        ).className =
+            "dot bad";
+    }
+}
+
+
+/* ============================================================
+   START BOT
+============================================================ */
+
+async function startBot() {
+
+    const button =
+        document.getElementById(
+            "startButton"
+        );
+
+
+    button.disabled =
+        true;
+
+    button.textContent =
+        "Starting...";
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/start",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            !data.success
+        ) {
+
+            throw new Error(
+                data.error ||
+                "Unable to start bot"
+            );
+        }
+
+
+        await refresh();
+
+    }
+
+    catch (error) {
+
+        showError(
+            error.message
+        );
+
+    }
+
+    finally {
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "Start Bot";
+    }
+}
+
+
+/* ============================================================
+   STOP BOT
+============================================================ */
+
+async function stopBot() {
+
+    const button =
+        document.getElementById(
+            "stopButton"
+        );
+
+
+    button.disabled =
+        true;
+
+    button.textContent =
+        "Stopping...";
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/stop",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                "Unable to stop bot"
+            );
+        }
+
+
+        await refresh();
+
+    }
+
+    catch (error) {
+
+        showError(
+            error.message
+        );
+
+    }
+
+    finally {
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "Stop Bot";
+    }
+}
+
+
+/* ============================================================
+   MANUAL FULL MARKET SCAN
+============================================================ */
+
+async function runScan(
+    button
+) {
+
+    if (!button) {
+        return;
+    }
+
+
+    button.disabled =
+        true;
+
+    button.textContent =
+        "Scanning Kraken...";
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/scan",
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            data.success === false
+        ) {
+
+            throw new Error(
+                data.error ||
+                "Scan failed"
+            );
+        }
+
+
+        renderSignals(
+            data.signals || []
+        );
+
+
+        await refresh();
+
+    }
+
+    catch (error) {
+
+        showError(
+            error.message
+        );
+
+    }
+
+    finally {
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "Run Full-Market Scan";
+    }
+}
+
+
+/* ============================================================
+   RESIZE
+============================================================ */
+
+window.addEventListener(
+    "resize",
+    function() {
+
+        refresh();
+
+    }
+);
+
+
+/* ============================================================
+   INITIAL LOAD
+============================================================ */
+
+refresh();
+
+
+/* ============================================================
+   LIVE DASHBOARD REFRESH
+============================================================ */
+
+setInterval(
+    refresh,
+    5000
+);
+
 </script>
+
 </body>
+
 </html>
