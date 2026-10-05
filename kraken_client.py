@@ -1,84 +1,183 @@
 from __future__ import annotations
 
-import time
 import ccxt
+
 
 class KrakenTrader:
     def __init__(self, settings):
-        self.s = settings
+        self.settings = settings
+
         self.exchange = ccxt.kraken({
             "apiKey": settings.kraken_api_key,
             "secret": settings.kraken_api_secret,
             "enableRateLimit": True,
-            "timeout": 20000,
+            "timeout": 30000,
         })
-        self.markets_loaded = False
 
-    def load_markets(self):
-        if not self.markets_loaded:
+        self.connected = False
+        self.authenticated = False
+        self.last_error = None
+        self.last_balance = None
+
+    def _require_credentials(self):
+        if not self.settings.kraken_api_key:
+            raise RuntimeError("KRAKEN_API_KEY is missing")
+
+        if not self.settings.kraken_api_secret:
+            raise RuntimeError("KRAKEN_API_SECRET is missing")
+
+    def test_connection(self):
+        """
+        Verify public Kraken connectivity.
+        """
+        try:
             self.exchange.load_markets()
-            self.markets_loaded = True
+            self.connected = True
+            self.last_error = None
+            return {
+                "connected": True,
+                "authenticated": self.authenticated,
+                "error": None,
+            }
+
+        except Exception as e:
+            self.connected = False
+            self.last_error = f"{type(e).__name__}: {e}"
+
+            return {
+                "connected": False,
+                "authenticated": False,
+                "error": self.last_error,
+            }
+
+    def test_authentication(self):
+        """
+        Verify that the Kraken API credentials actually work
+        by requesting the authenticated account balance.
+        """
+        try:
+            self._require_credentials()
+
+            balance = self.exchange.fetch_balance()
+
+            self.authenticated = True
+            self.connected = True
+            self.last_error = None
+            self.last_balance = balance
+
+            return {
+                "connected": True,
+                "authenticated": True,
+                "error": None,
+            }
+
+        except Exception as e:
+            self.authenticated = False
+            self.last_error = f"{type(e).__name__}: {e}"
+
+            return {
+                "connected": self.connected,
+                "authenticated": False,
+                "error": self.last_error,
+            }
+
+    def connection_status(self):
+        return {
+            "connected": self.connected,
+            "authenticated": self.authenticated,
+            "error": self.last_error,
+        }
 
     def fetch_ohlcv(self, symbol, timeframe, limit):
-        self.load_markets()
-        return self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        return self.exchange.fetch_ohlcv(
+            symbol,
+            timeframe=timeframe,
+            limit=limit,
+        )
 
     def fetch_ticker(self, symbol):
-        self.load_markets()
         return self.exchange.fetch_ticker(symbol)
 
-    def fetch_order_book(self, symbol, limit=10):
-        self.load_markets()
-        return self.exchange.fetch_order_book(symbol, limit=limit)
-
-    def free_quote(self, quote="USD"):
-        self.load_markets()
+    def free_quote(self, currency="USD"):
         balance = self.exchange.fetch_balance()
-        return float((balance.get("free") or {}).get(quote, 0) or 0)
 
-    def market_buy(self, symbol, quote_usd):
-        self.load_markets()
-        ticker = self.fetch_ticker(symbol)
-        ask = float(ticker.get("ask") or ticker.get("last") or 0)
+        free = balance.get("free", {}).get(currency)
+
+        if free is None:
+            free = 0
+
+        return float(free)
+
+    def market_buy(self, symbol, quote_amount):
+        """
+        Buy using a USD quote amount.
+        """
+        ticker = self.exchange.fetch_ticker(symbol)
+
+        ask = float(
+            ticker.get("ask")
+            or ticker.get("last")
+            or 0
+        )
+
         if ask <= 0:
-            raise RuntimeError("No valid ask price")
+            raise RuntimeError(
+                f"Unable to determine {symbol} market price"
+            )
 
-        amount = quote_usd / ask
-        amount = float(self.exchange.amount_to_precision(symbol, amount))
-        if amount <= 0:
-            raise RuntimeError("Order amount rounded to zero")
+        amount = quote_amount / ask
 
-        if self.s.dry_run or not self.s.live_trading:
-            return {
-                "id": f"DRY-BUY-{int(time.time()*1000)}",
-                "status": "DRY_RUN",
-                "symbol": symbol,
-                "side": "buy",
-                "amount": amount,
-                "price": ask,
-                "cost": amount * ask,
-            }
+        order = self.exchange.create_market_buy_order(
+            symbol,
+            amount,
+        )
 
-        return self.exchange.create_market_buy_order(symbol, amount)
+        price = float(
+            order.get("average")
+            or order.get("price")
+            or ask
+        )
+
+        filled = float(
+            order.get("filled")
+            or amount
+        )
+
+        return {
+            "order_id": order.get("id"),
+            "price": price,
+            "amount": filled,
+            "raw": order,
+        }
 
     def market_sell(self, symbol, amount):
-        self.load_markets()
-        amount = float(self.exchange.amount_to_precision(symbol, amount))
-        if amount <= 0:
-            raise RuntimeError("Sell amount rounded to zero")
+        order = self.exchange.create_market_sell_order(
+            symbol,
+            amount,
+        )
 
-        ticker = self.fetch_ticker(symbol)
-        bid = float(ticker.get("bid") or ticker.get("last") or 0)
+        ticker = self.exchange.fetch_ticker(symbol)
 
-        if self.s.dry_run or not self.s.live_trading:
-            return {
-                "id": f"DRY-SELL-{int(time.time()*1000)}",
-                "status": "DRY_RUN",
-                "symbol": symbol,
-                "side": "sell",
-                "amount": amount,
-                "price": bid,
-                "cost": amount * bid,
-            }
+        fallback_price = float(
+            ticker.get("bid")
+            or ticker.get("last")
+            or 0
+        )
 
-        return self.exchange.create_market_sell_order(symbol, amount)
+        price = float(
+            order.get("average")
+            or order.get("price")
+            or fallback_price
+        )
+
+        filled = float(
+            order.get("filled")
+            or amount
+        )
+
+        return {
+            "order_id": order.get("id"),
+            "price": price,
+            "amount": filled,
+            "raw": order,
+        }
